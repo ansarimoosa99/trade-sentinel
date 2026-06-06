@@ -1,0 +1,32 @@
+# Logs
+logs/
+*.log
+
+# Build outputs
+build/
+target/
+.gradle/
+*.class
+*.jar
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local Spring property overrides - NEVER commit this file
+application-local.properties
+
+# Secrets and credentials
+.env
+.env.local
+*.pem
+*.key
+.env
+.env.*

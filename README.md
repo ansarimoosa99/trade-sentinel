@@ -53,18 +53,35 @@ java -jar build\libs\trade-sentinel-0.0.1-SNAPSHOT.jar
 
 ## Claude API Key
 
-The app works without a key in offline triage mode. To enable Claude triage:
+## Claude API Key
 
-```powershell
-$env:ANTHROPIC_API_KEY="sk-ant-..."
-.\gradlew.bat bootRun
-```
+The app works without a key in offline triage mode. To enable Claude triage **locally** (and never commit credentials to GitHub):
 
-Optional model override:
+1. Copy the example to a local-only file:
+   ```bash
+   cp src/main/resources/application-local.properties.example src/main/resources/application-local.properties
+   ```
 
-```powershell
-$env:ANTHROPIC_MODEL="claude-3-5-sonnet-latest"
-```
+2. Edit `application-local.properties` and add your API key:
+   ```properties
+   anthropic.enabled=true
+   anthropic.api-key=sk-ant-your-key-here
+   anthropic.model=claude-3-5-sonnet-latest
+   ```
+
+3. Run the app:
+   ```powershell
+   .\gradlew.bat bootRun
+   ```
+
+**IMPORTANT**: `application-local.properties` is in `.gitignore` and will never be committed. The default `application.properties` has `anthropic.enabled=false`, so credentials are safe in version control.
+
+**Production deployment**: Use environment variables or secure secrets management (GitHub Secrets, HashiCorp Vault, etc.):
+   ```powershell
+   $env:ANTHROPIC_ENABLED="true"
+   $env:ANTHROPIC_API_KEY="sk-ant-..."
+   .\gradlew.bat bootRun
+   ```
 
 ## Demo Script
 

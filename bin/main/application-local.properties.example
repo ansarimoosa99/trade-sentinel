@@ -1,0 +1,11 @@
+# EXAMPLE FILE - Copy to application-local.properties and fill in your credentials
+# This file is gitignored and will NOT be committed to the repository
+
+# Enable Claude API triage
+anthropic.enabled=true
+
+# Your Claude API key - KEEP THIS SECRET, NEVER COMMIT
+anthropic.api-key=sk-ant-your-key-here
+
+# Optional: override the Claude model
+anthropic.model=claude-3-5-sonnet-latest

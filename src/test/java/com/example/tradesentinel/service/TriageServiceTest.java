@@ -11,7 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class TriageServiceTest {
-  private final TriageService triageService = new TriageService(new ObjectMapper());
+  private final TriageService triageService = new TriageService(new ObjectMapper(), false, null, null, true, 5.0);
 
   @Test
   void offlineTriageReturnsStructuredAnalystOutput() {

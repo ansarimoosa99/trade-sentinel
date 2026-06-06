@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 
@@ -30,7 +31,8 @@ public class DetectionService {
             detectLayering(events, baseline),
             detectSpoofing(events, baseline),
             detectWashTrading(events, baseline),
-            detectMomentumIgnition(events, baseline))
+            detectMomentumIgnition(events, baseline),
+            detectFrontRunning(events, baseline))
         .flatMap(List::stream)
         .toList();
     List<Alert> alerts = new ArrayList<>();
@@ -246,6 +248,59 @@ public class DetectionService {
               "avgGapSeconds", round(cycles.stream().mapToLong(WashCycle::seconds).average().orElse(0), 1)),
           evidence,
           Instant.now()));
+    }
+    return alerts;
+  }
+
+  private List<Alert> detectFrontRunning(List<OrderEvent> events, SurveillanceBaseline baseline) {
+    List<OrderEvent> executions = events.stream()
+        .filter(e -> "EXECUTE".equals(e.eventType()))
+        .sorted(Comparator.comparing(OrderEvent::eventTime))
+        .toList();
+
+    // Find large institutional executions (top 10% by qty in this batch)
+    if (executions.isEmpty()) return List.of();
+    double medianQty = median(executions.stream().mapToDouble(e -> (double) e.quantity()).sorted().boxed().toList());
+    double institutionalThreshold = medianQty * 5;
+
+    List<Alert> alerts = new ArrayList<>();
+    Set<String> alerted = new HashSet<>();
+
+    for (OrderEvent institutional : executions) {
+      if (institutional.quantity() < institutionalThreshold) continue;
+
+      // Look for a different trader who executed the same side within 500 ms BEFORE
+      for (OrderEvent candidate : executions) {
+        if (candidate.traderId().equals(institutional.traderId())) continue;
+        if (!candidate.symbol().equals(institutional.symbol())) continue;
+        if (!candidate.side().equals(institutional.side())) continue;
+
+        long millisBefore = java.time.Duration.between(candidate.eventTime(), institutional.eventTime()).toMillis();
+        if (millisBefore < 0 || millisBefore > 500) continue;
+
+        String key = candidate.traderId() + "|" + candidate.symbol();
+        if (alerted.contains(key)) continue;
+        alerted.add(key);
+
+        int score = Math.min(90, 65 + (int) (institutional.quantity() / institutionalThreshold * 10));
+        alerts.add(new Alert(
+            "AFR-%04d".formatted(alerts.size() + 1),
+            "Front Running",
+            candidate.traderId(),
+            candidate.accountId(),
+            candidate.symbol(),
+            score >= 80 ? "HIGH" : "MEDIUM",
+            score,
+            Map.of(
+                "frontRunnerTrader", candidate.traderId(),
+                "institutionalTrader", institutional.traderId(),
+                "frontRunQty", candidate.quantity(),
+                "institutionalQty", institutional.quantity(),
+                "leadTimeMs", millisBefore,
+                "side", candidate.side()),
+            List.of(candidate, institutional),
+            Instant.now()));
+      }
     }
     return alerts;
   }

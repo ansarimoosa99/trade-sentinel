@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trade Sentinel — Compliance Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Themes ──────────────────────────────────────────────────────────────── */
+    :root {
+      --bg: #0f1117; --panel: #1a1d27; --panel2: #21253a;
+      --border: #2a2f45; --text: #e2e8f0; --muted: #8892a4;
+      --accent: #6366f1; --accent2: #818cf8;
+      --green: #10b981; --amber: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+      --critical: #dc2626; --high: #ea580c; --medium: #d97706; --low: #16a34a;
+      --upload-bg: rgba(99,102,241,0.05); --upload-border: rgba(99,102,241,0.3);
+      --row-hover: rgba(99,102,241,0.04);
+    }
+    [data-theme="light"] {
+      --bg: #f1f5f9; --panel: #ffffff; --panel2: #f8fafc;
+      --border: #e2e8f0; --text: #1e293b; --muted: #64748b;
+      --accent: #6366f1; --accent2: #4f46e5;
+      --green: #059669; --amber: #b45309; --red: #dc2626; --blue: #2563eb;
+      --critical: #dc2626; --high: #c2410c; --medium: #b45309; --low: #15803d;
+      --upload-bg: rgba(99,102,241,0.04); --upload-border: rgba(99,102,241,0.4);
+      --row-hover: rgba(99,102,241,0.06);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; transition: background 0.2s, color 0.2s; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand svg { color: var(--accent); }
+    .brand h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .brand span { font-size: 11px; color: var(--muted); background: var(--panel2); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    #healthBadge { font-size: 12px; padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); }
+    #btnTheme {
+      padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--panel2); color: var(--text); cursor: pointer; font-size: 13px;
+      transition: background 0.15s; white-space: nowrap;
+    }
+    #btnTheme:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── Stats bar ── */
+    .statsbar { display: flex; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+    .statcell { flex: 1; background: var(--panel); padding: 10px 16px; text-align: center; }
+    .statcell strong { display: block; font-size: 20px; font-weight: 700; color: var(--accent2); }
+    .statcell span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Nav tabs ── */
+    nav { display: flex; background: var(--panel); border-bottom: 1px solid var(--border); padding: 0 20px; }
+    nav a {
+      display: inline-block; padding: 12px 18px; color: var(--muted);
+      text-decoration: none; border-bottom: 2px solid transparent; font-weight: 500;
+      font-size: 13px; transition: color 0.15s;
+    }
+    nav a:hover { color: var(--text); }
+    nav a.active { color: var(--accent2); border-bottom-color: var(--accent); }
+
+    /* ── Layout ── */
+    .page { display: none; padding: 20px 24px; }
+    .page.active { display: block; }
+
+    /* ── Scenario buttons ── */
+    .scenario-bar {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+      padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    }
+    .scenario-bar span { font-size: 12px; color: var(--muted); align-self: center; margin-right: 4px; }
+    .btn-scenario {
+      padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: background 0.15s;
+    }
+    .btn-scenario:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-scenario:disabled { opacity: 0.5; cursor: wait; }
+
+    /* ── CSV Upload ── */
+    .upload-section {
+      margin-bottom: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    }
+    .upload-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; cursor: pointer; user-select: none;
+    }
+    .upload-header:hover { background: var(--panel2); }
+    .upload-header span { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .upload-chevron { font-size: 11px; color: var(--muted); transition: transform 0.2s; }
+    .upload-chevron.open { transform: rotate(180deg); }
+    .upload-body { display: none; padding: 14px 16px; border-top: 1px solid var(--border); }
+    .upload-body.open { display: block; }
+    .drop-zone {
+      border: 2px dashed var(--upload-border); border-radius: 8px;
+      background: var(--upload-bg); padding: 28px; text-align: center;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s; margin-bottom: 12px;
+    }
+    .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(99,102,241,0.1); }
+    .drop-zone input[type=file] { display: none; }
+    .drop-zone p { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .drop-zone label {
+      display: inline-block; padding: 6px 16px; border-radius: 6px;
+      background: var(--accent); color: #fff; cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+    #uploadFileName { font-size: 12px; color: var(--accent2); margin-top: 8px; }
+    #btnRunCsv {
+      padding: 7px 18px; border-radius: 6px; border: none;
+      background: var(--accent); color: #fff; cursor: pointer; font-size: 13px; font-weight: 600;
+      opacity: 0.5; pointer-events: none; transition: opacity 0.15s;
+    }
+    #btnRunCsv.ready { opacity: 1; pointer-events: auto; }
+    #btnRunCsv.ready:hover { background: var(--accent2); }
+    #csvResult {
+      margin-top: 10px; padding: 10px 14px; border-radius: 6px; font-size: 12px;
+      display: none; border-left: 3px solid var(--green);
+      background: rgba(16,185,129,0.08); color: var(--text);
+    }
+    #csvResult.error { border-left-color: var(--red); background: rgba(239,68,68,0.08); }
+
+    /* ── Feed controls ── */
+    /* ── Trigger result toast ── */
+    #triggerToast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 999;
+      min-width: 300px; max-width: 420px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35); padding: 16px 18px 14px;
+      display: none; animation: slideUp 0.25s ease-out;
+    }
+    #triggerToast.visible { display: block; }
+    #triggerToast.toast-ok   { border-left: 4px solid var(--green); }
+    #triggerToast.toast-warn { border-left: 4px solid var(--amber); }
+    #triggerToast.toast-err  { border-left: 4px solid var(--red); }
+    @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast-title { font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+    .toast-row   { font-size: 12px; color: var(--muted); margin: 3px 0; }
+    .toast-row strong { color: var(--text); }
+    #toastClose  { float: right; cursor: pointer; color: var(--muted); font-size: 18px; background: none; border: none; line-height: 1; margin: -4px -4px 0 0; }
+
+    .feed-toolbar {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+    }
+    #btnPauseFeed {
+      padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--panel2); color: var(--text); cursor: pointer; font-size: 12px;
+      font-weight: 600; display: flex; align-items: center; gap: 6px; transition: background 0.15s;
+    }
+    #btnPauseFeed:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #btnPauseFeed.paused { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.5); color: var(--amber); }
+    #pausedBadge {
+      display: none; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
+      background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.4);
+    }
+    #pausedBadge.visible { display: inline-block; }
+    .feed-hint { font-size: 11px; color: var(--muted); }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); }
+    th {
+      padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+      background: var(--panel2); border-bottom: 1px solid var(--border);
+    }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--row-hover); }
+    #liveFeedBody tr td { font-size: 12px; font-family: monospace; }
+
+    /* ── Badges ── */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-critical { background: rgba(220,38,38,0.15); color: var(--critical); border: 1px solid rgba(220,38,38,0.3); }
+    .badge-high     { background: rgba(234,88,12,0.15);  color: var(--high);     border: 1px solid rgba(234,88,12,0.3); }
+    .badge-medium   { background: rgba(217,119,6,0.15);  color: var(--medium);   border: 1px solid rgba(217,119,6,0.3); }
+    .badge-low      { background: rgba(22,163,74,0.15);  color: var(--low);      border: 1px solid rgba(22,163,74,0.3); }
+    .badge-real     { background: rgba(239,68,68,0.15);  color: var(--red);      border: 1px solid rgba(239,68,68,0.3); }
+    .badge-review   { background: rgba(245,158,11,0.15); color: var(--amber);    border: 1px solid rgba(245,158,11,0.3); }
+    .badge-ignore   { background: rgba(16,185,129,0.15); color: var(--green);    border: 1px solid rgba(16,185,129,0.3); }
+    .badge-escalate { background: rgba(239,68,68,0.15);  color: var(--red);      border: 1px solid rgba(239,68,68,0.3); }
+    .badge-open     { background: rgba(59,130,246,0.15); color: var(--blue);     border: 1px solid rgba(59,130,246,0.3); }
+    .badge-closed   { background: rgba(16,185,129,0.15); color: var(--green);    border: 1px solid rgba(16,185,129,0.3); }
+    .badge-active   { background: rgba(239,68,68,0.15);  color: var(--red);      border: 1px solid rgba(239,68,68,0.3); }
+
+    /* ── Confidence bar ── */
+    .conf-bar { display: flex; align-items: center; gap: 8px; }
+    .conf-track { flex: 1; height: 4px; background: var(--panel2); border-radius: 2px; max-width: 80px; }
+    .conf-fill  { height: 4px; border-radius: 2px; background: var(--accent); }
+
+    /* ── Explainability panel ── */
+    .explain-panel { margin-top: 8px; padding: 12px; background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+    .explain-panel h4 { font-size: 12px; color: var(--accent2); margin-bottom: 6px; }
+    .explain-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    .explain-col h5 { color: var(--muted); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; }
+    .explain-col ul { padding-left: 14px; }
+    .explain-col li { margin: 3px 0; color: var(--text); }
+    .case-note { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--accent); background: rgba(99,102,241,0.06); font-size: 12px; color: var(--muted); }
+    .risk-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-weight: 700; font-size: 12px; }
+
+    /* ── Charts ── */
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .chart-card h3 { font-size: 13px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .chart-card canvas { max-height: 200px; }
+
+    /* ── Escalation matrix ── */
+    .matrix-table { width: 100%; margin-top: 16px; }
+    .matrix-table th { font-size: 12px; }
+    .matrix-table td { font-size: 12px; }
+
+    /* ── Audit page ── */
+    .audit-toolbar {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .audit-search {
+      flex: 1; min-width: 200px; padding: 7px 12px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--panel); color: var(--text);
+      font-size: 13px; outline: none;
+    }
+    .audit-search:focus { border-color: var(--accent); }
+    .audit-filter-btn {
+      padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--panel2); color: var(--muted); cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: all 0.15s;
+    }
+    .audit-filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .audit-filter-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Audit row left-border color coding */
+    .audit-row td:first-child { border-left: 3px solid transparent; }
+    .audit-alert    td:first-child { border-left-color: var(--red); }
+    .audit-triage   td:first-child { border-left-color: var(--accent); }
+    .audit-case     td:first-child { border-left-color: var(--blue); }
+    .audit-watch    td:first-child { border-left-color: var(--amber); }
+    .audit-notif    td:first-child { border-left-color: var(--green); }
+    .audit-suppress td:first-child { border-left-color: var(--muted); }
+
+    .audit-type-chip {
+      display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px;
+      border-radius: 12px; font-size: 11px; font-weight: 700;
+    }
+    .chip-alert    { background: rgba(239,68,68,0.12);   color: var(--red);    border: 1px solid rgba(239,68,68,0.25); }
+    .chip-triage   { background: rgba(99,102,241,0.12);  color: var(--accent2); border: 1px solid rgba(99,102,241,0.25); }
+    .chip-case     { background: rgba(59,130,246,0.12);  color: var(--blue);   border: 1px solid rgba(59,130,246,0.25); }
+    .chip-watch    { background: rgba(245,158,11,0.12);  color: var(--amber);  border: 1px solid rgba(245,158,11,0.25); }
+    .chip-notif    { background: rgba(16,185,129,0.12);  color: var(--green);  border: 1px solid rgba(16,185,129,0.25); }
+    .chip-suppress { background: rgba(136,146,164,0.12); color: var(--muted);  border: 1px solid rgba(136,146,164,0.25); }
+
+    .audit-desc { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+    .audit-ts   { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    /* ── Live feed flash ── */
+    @keyframes flashNew { from { background: rgba(99,102,241,0.18); } to { background: transparent; } }
+    .flash-new { animation: flashNew 2s ease-out; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+    </svg>
+    <h1>Trade Sentinel</h1>
+    <span>AI Surveillance Platform</span>
+  </div>
+  <div class="header-right">
+    <button id="btnTheme" onclick="toggleTheme()">☀ Bright Mode</button>
+    <div id="healthBadge" style="color:var(--muted)">Connecting...</div>
+  </div>
+</header>
+
+<div class="statsbar">
+  <div class="statcell"><strong th:text="${totalEvents}">0</strong><span>Trade Events</span></div>
+  <div class="statcell"><strong th:text="${totalAlerts}">0</strong><span>Alerts</span></div>
+  <div class="statcell"><strong th:text="${openCases}">0</strong><span>Open Cases</span></div>
+  <div class="statcell"><strong th:text="${watchlistSize}">0</strong><span>Watchlisted</span></div>
+  <div class="statcell"><strong th:text="${totalNotifications}">0</strong><span>Notifications</span></div>
+  <div class="statcell" id="liveCount"><strong>—</strong><span>Live / 3s</span></div>
+</div>
+
+<nav>
+  <a href="/"          th:classappend="${tab == 'trades'}    ? 'active' : ''">Live Trades</a>
+  <a href="/alerts"    th:classappend="${tab == 'alerts'}    ? 'active' : ''">Alerts</a>
+  <a href="/cases"     th:classappend="${tab == 'cases'}     ? 'active' : ''">Cases</a>
+  <a href="/watchlist" th:classappend="${tab == 'watchlist'} ? 'active' : ''">Watchlist</a>
+  <a href="/audit"     th:classappend="${tab == 'audit'}     ? 'active' : ''">Audit Trail</a>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Live Trades                                                           -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div th:if="${tab == 'trades'}" class="page active">
+
+  <!-- Charts row -->
+  <div class="charts-grid">
+    <div class="chart-card"><h3>Alert Severity Distribution</h3><canvas id="chartSeverity"></canvas></div>
+    <div class="chart-card"><h3>Verdict Distribution</h3><canvas id="chartVerdict"></canvas></div>
+    <div class="chart-card"><h3>Case Status</h3><canvas id="chartCases"></canvas></div>
+    <div class="chart-card"><h3>Risk Score Trend</h3><canvas id="chartRisk"></canvas></div>
+  </div>
+
+  <!-- Scenario triggers -->
+  <div class="scenario-bar">
+    <span>Demo triggers:</span>
+    <button class="btn-scenario" onclick="trigger('LAYERING')">Generate Layering Attack</button>
+    <button class="btn-scenario" onclick="trigger('SPOOFING')">Generate Spoofing Attack</button>
+    <button class="btn-scenario" onclick="trigger('WASH_TRADING')">Generate Wash Trading</button>
+    <button class="btn-scenario" onclick="trigger('FRONT_RUNNING')">Generate Front Running</button>
+    <button class="btn-scenario" onclick="trigger('PUMP_AND_DUMP')">Generate Pump &amp; Dump</button>
+    <button class="btn-scenario" onclick="trigger('MOMENTUM_IGNITION')">Generate Momentum Ignition</button>
+  </div>
+
+  <!-- CSV Upload (collapsible) -->
+  <div class="upload-section">
+    <div class="upload-header" onclick="toggleUpload()">
+      <span>📂 Upload CSV for Analysis</span>
+      <span class="upload-chevron" id="uploadChevron">▼</span>
+    </div>
+    <div class="upload-body" id="uploadBody">
+      <div class="drop-zone" id="dropZone"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+           onclick="document.getElementById('csvFileInput').click()">
+        <p>Drag &amp; drop a CSV file here, or click to browse</p>
+        <label for="csvFileInput">Choose File</label>
+        <input type="file" id="csvFileInput" accept=".csv,text/plain" onchange="onFileSelected(event)">
+        <div id="uploadFileName"></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button id="btnRunCsv" onclick="runCsvUpload()">▶ Run Detection</button>
+        <span style="font-size:12px; color:var(--muted);">CSV must have headers: orderId, traderId, accountId, symbol, exchange, side, quantity, price, eventType, eventTime</span>
+      </div>
+      <div id="csvResult"></div>
+    </div>
+  </div>
+
+  <!-- Feed controls -->
+  <div class="feed-toolbar">
+    <button id="btnPauseFeed" onclick="toggleFeedPause()">
+      <span id="pauseIcon">⏸</span>&nbsp;<span id="pauseLabel">Pause Feed</span>
+    </button>
+    <span id="pausedBadge">⏸ FEED PAUSED</span>
+    <span class="feed-hint">Feed auto-pauses when you trigger a scenario. State is remembered across reloads.</span>
+  </div>
+
+  <!-- Live trade feed table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Trader</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Type</th></tr>
+      </thead>
+      <tbody id="liveFeedBody">
+        <tr><td colspan="7" class="empty">Waiting for live data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Escalation matrix reference -->
+  <div style="margin-top:20px; padding:16px; background:var(--panel); border:1px solid var(--border); border-radius:8px;">
+    <h3 style="font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">Escalation Matrix</h3>
+    <div class="table-wrap">
+      <table class="matrix-table">
+        <thead><tr><th>Risk Score</th><th>Verdict</th><th>Automatic Action</th></tr></thead>
+        <tbody>
+          <tr><td>0 – 40</td><td><span class="badge badge-ignore">FALSE POSITIVE</span></td><td>Ignore</td></tr>
+          <tr><td>41 – 70</td><td><span class="badge badge-review">REVIEW</span></td><td>Analyst Queue</td></tr>
+          <tr><td>71 – 85</td><td><span class="badge badge-real">REAL ALERT</span></td><td>Create Compliance Case</td></tr>
+          <tr><td>86 – 95</td><td><span class="badge badge-real">REAL ALERT</span></td><td>Case + Notification</td></tr>
+          <tr><td>96 – 100</td><td><span class="badge badge-real">REAL ALERT</span></td><td>Case + Notification + Watchlist</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Alerts                                                                -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div th:if="${tab == 'alerts'}" class="page active">
+  <div class="scenario-bar">
+    <span>Demo triggers:</span>
+    <button class="btn-scenario" onclick="trigger('LAYERING')">Layering</button>
+    <button class="btn-scenario" onclick="trigger('SPOOFING')">Spoofing</button>
+    <button class="btn-scenario" onclick="trigger('WASH_TRADING')">Wash Trading</button>
+    <button class="btn-scenario" onclick="trigger('FRONT_RUNNING')">Front Running</button>
+    <button class="btn-scenario" onclick="trigger('PUMP_AND_DUMP')">Pump &amp; Dump</button>
+  </div>
+
+  <div th:if="${alerts.empty}" class="empty" style="margin-top:40px">
+    No alerts yet — trigger a scenario or wait for the scheduler to generate suspicious activity.
+  </div>
+
+  <div th:each="alert : ${alerts}" style="margin-bottom:16px; border:1px solid var(--border); border-radius:8px; background:var(--panel); overflow:hidden;">
+    <div style="padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+      <div>
+        <div style="font-weight:700; font-size:15px;" th:text="${alert.pattern + ' — ' + alert.symbol}">Pattern</div>
+        <div style="color:var(--muted); font-size:12px; margin-top:3px;">
+          <span th:text="${alert.alertId}"></span> |
+          Trader <span th:text="${alert.traderId}"></span> |
+          Score <strong th:text="${alert.score}"></strong>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <span th:class="'badge badge-' + ${alert.severity.toLowerCase()}" th:text="${alert.severity}"></span>
+        <span th:with="rs=${alert.riskScore}"
+              th:style="'background:' + (${rs >= 86} ? 'rgba(239,68,68,0.15)' : (${rs >= 71} ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)')) + '; color:' + (${rs >= 86} ? '#ef4444' : (${rs >= 71} ? '#f59e0b' : '#10b981')) + '; border:1px solid ' + (${rs >= 86} ? 'rgba(239,68,68,0.3)' : (${rs >= 71} ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'))"
+              class="risk-pill">
+          Risk: <span th:text="${alert.riskScore}"></span>
+        </span>
+        <span th:if="${triageByAlert.containsKey(alert.alertId)}"
+              th:with="v=${triageByAlert[alert.alertId].verdict}"
+              th:class="'badge ' + (${v == 'ESCALATE'} ? 'badge-escalate' : (${v == 'REVIEW'} ? 'badge-review' : 'badge-ignore'))"
+              th:text="${v}"></span>
+      </div>
+    </div>
+
+    <div th:if="${triageByAlert.containsKey(alert.alertId)}" th:with="t=${triageByAlert[alert.alertId]}" class="explain-panel" style="margin:12px 16px;">
+      <h4>AI Explainability Panel</h4>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+        <div><div style="font-size:11px; color:var(--muted);">PATTERN</div><strong th:text="${alert.pattern}"></strong></div>
+        <div>
+          <div style="font-size:11px; color:var(--muted);">CONFIDENCE</div>
+          <div class="conf-bar">
+            <span th:text="${t.confidence + '%'}"></span>
+            <div class="conf-track"><div class="conf-fill" th:style="'width:' + ${t.confidence} + '%'"></div></div>
+          </div>
+        </div>
+        <div><div style="font-size:11px; color:var(--muted);">FP PROBABILITY</div><span th:text="${t.fpProbability + '%'}"></span></div>
+        <div><div style="font-size:11px; color:var(--muted);">TRIAGE SOURCE</div><code style="font-size:11px; color:var(--accent2);" th:text="${t.source}"></code></div>
+      </div>
+      <div class="case-note" th:text="${t.caseNote}"></div>
+    </div>
+    <div style="padding:0 16px 14px; color:var(--muted); font-size:12px;" th:if="${!triageByAlert.containsKey(alert.alertId)}">
+      Triage pending...
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Cases                                                                 -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div th:if="${tab == 'cases'}" class="page active">
+  <div th:if="${cases.empty}" class="empty">No compliance cases yet.</div>
+  <div class="table-wrap" th:if="${!cases.empty}">
+    <table>
+      <thead><tr><th>Case ID</th><th>Alert ID</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Created</th></tr></thead>
+      <tbody>
+        <tr th:each="c : ${cases}">
+          <td><code th:text="${c.caseId}"></code></td>
+          <td><code th:text="${c.alertId}"></code></td>
+          <td><span th:class="'badge ' + (${c.status == 'OPEN'} ? 'badge-open' : 'badge-closed')" th:text="${c.status}"></span></td>
+          <td th:text="${c.priority}"></td>
+          <td th:text="${c.assignedTo}"></td>
+          <td th:text="${c.createdAt}"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Watchlist                                                             -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div th:if="${tab == 'watchlist'}" class="page active">
+  <div th:if="${watchlist.empty}" class="empty">No traders on watchlist yet.</div>
+  <div class="table-wrap" th:if="${!watchlist.empty}">
+    <table>
+      <thead><tr><th>Trader ID</th><th>Risk Score</th><th>Alert Count</th><th>Status</th><th>Reason</th><th>Added</th></tr></thead>
+      <tbody>
+        <tr th:each="w : ${watchlist}">
+          <td><strong th:text="${w.traderId}"></strong></td>
+          <td>
+            <div class="conf-bar">
+              <strong th:text="${w.riskScore}"></strong>
+              <div class="conf-track"><div class="conf-fill"
+                   th:style="'width:' + ${w.riskScore} + '%; background:' + (${w.riskScore >= 86} ? 'var(--red)' : (${w.riskScore >= 71} ? 'var(--amber)' : 'var(--green)'))"></div></div>
+            </div>
+          </td>
+          <td th:text="${w.alertCount}"></td>
+          <td><span th:class="'badge badge-' + ${w.status.toLowerCase()}" th:text="${w.status}"></span></td>
+          <td th:text="${w.addedReason}"></td>
+          <td th:text="${w.addedAt}"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Audit Trail                                                           -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div th:if="${tab == 'audit'}" class="page active">
+
+  <!-- Legend -->
+  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; align-items:center;">
+    <span style="font-size:11px; color:var(--muted); margin-right:4px;">Event types:</span>
+    <span class="audit-type-chip chip-alert">🚨 Alert Created</span>
+    <span class="audit-type-chip chip-triage">🤖 Triage</span>
+    <span class="audit-type-chip chip-case">📁 Case</span>
+    <span class="audit-type-chip chip-watch">👁 Watchlist</span>
+    <span class="audit-type-chip chip-notif">🔔 Notification</span>
+    <span class="audit-type-chip chip-suppress">🔇 Suppressed</span>
+  </div>
+
+  <!-- Toolbar: search + filters -->
+  <div class="audit-toolbar">
+    <input class="audit-search" id="auditSearch" type="text" placeholder="Search by alert ID, actor, or description…" oninput="filterAudit()">
+    <button class="audit-filter-btn active" data-filter="ALL"    onclick="setAuditFilter('ALL',    this)">All</button>
+    <button class="audit-filter-btn"        data-filter="ALERT"  onclick="setAuditFilter('ALERT',  this)">Alerts</button>
+    <button class="audit-filter-btn"        data-filter="TRIAGE" onclick="setAuditFilter('TRIAGE', this)">Triage</button>
+    <button class="audit-filter-btn"        data-filter="CASE"   onclick="setAuditFilter('CASE',   this)">Cases</button>
+    <button class="audit-filter-btn"        data-filter="WATCH"  onclick="setAuditFilter('WATCH',  this)">Watchlist</button>
+    <button class="audit-filter-btn"        data-filter="NOTIF"  onclick="setAuditFilter('NOTIF',  this)">Notifications</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="auditTable">
+      <thead>
+        <tr>
+          <th style="width:140px">When</th>
+          <th style="width:160px">Event</th>
+          <th style="width:120px">Alert / Case</th>
+          <th style="width:120px">Actor</th>
+          <th>What Happened</th>
+        </tr>
+      </thead>
+      <tbody id="auditBody">
+        <tr th:each="a : ${auditEvents}"
+            th:with="cat=${#strings.containsIgnoreCase(a.eventType,'ALERT') ? 'alert' :
+                          (#strings.containsIgnoreCase(a.eventType,'TRIAGE') ? 'triage' :
+                          (#strings.containsIgnoreCase(a.eventType,'CASE') ? 'case' :
+                          (#strings.containsIgnoreCase(a.eventType,'WATCH') ? 'watch' :
+                          (#strings.containsIgnoreCase(a.eventType,'NOTIF') ? 'notif' : 'suppress'))))},
+                    label=${a.eventType == 'ALERT_CREATED' ? '🚨 Alert Created' :
+                            (a.eventType == 'ALERT_IGNORED' ? '🔇 Alert Ignored' :
+                            (a.eventType == 'TRIAGE_COMPLETE' ? '🤖 Triage Complete' :
+                            (a.eventType == 'CASE_CREATED' ? '📁 Case Created' :
+                            (a.eventType == 'WATCHLIST_AUTO_ADD' ? '👁 Watchlist Add' :
+                            (a.eventType == 'WATCHLIST_UPDATED' ? '👁 Watchlist Update' :
+                            (a.eventType == 'NOTIFICATION_SENT' ? '🔔 Notification' :
+                            (a.eventType == 'RISK_SCORED' ? '📊 Risk Scored' : a.eventType)))))))}"
+            th:data-type="${a.eventType}"
+            th:data-text="${(a.alertId ?: '') + ' ' + (a.eventType ?: '') + ' ' + (a.actor ?: '') + ' ' + (a.description ?: '')}"
+            th:class="'audit-row audit-' + ${cat}">
+          <td class="audit-ts" th:text="${a.eventTime}"></td>
+          <td>
+            <span th:class="'audit-type-chip chip-' + ${cat}" th:text="${label}"></span>
+          </td>
+          <td><code style="font-size:11px;" th:text="${a.alertId ?: '—'}"></code></td>
+          <td style="font-size:12px;" th:text="${a.actor}"></td>
+          <td class="audit-desc" th:title="${a.description}" th:text="${a.description}"></td>
+        </tr>
+        <tr th:if="${auditEvents.empty}">
+          <td colspan="5" class="empty">No audit events yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="auditEmpty" style="display:none;" class="empty">No events match your filter.</div>
+</div>
+
+<!-- ── Trigger result toast (shown after any Generate button) ── -->
+<div id="triggerToast">
+  <button id="toastClose" onclick="document.getElementById('triggerToast').className=''">×</button>
+  <div class="toast-title" id="toastTitle">Running…</div>
+  <div id="toastBody"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- JavaScript                                                                  -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<script>
+  // ── Theme ──────────────────────────────────────────────────────────────────
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const btn = document.getElementById('btnTheme');
+    if (btn) btn.textContent = theme === 'light' ? '🌙 Dark Mode' : '☀ Bright Mode';
+    localStorage.setItem('ts-theme', theme);
+  }
+  function toggleTheme() {
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+  }
+  applyTheme(localStorage.getItem('ts-theme') || 'dark');
+
+  // ── Health check ──────────────────────────────────────────────────────────
+  async function loadHealth() {
+    try {
+      const r = await fetch('/api/health');
+      const d = await r.json();
+      const el = document.getElementById('healthBadge');
+      if (d.claudeConfigured) {
+        el.textContent = '● Claude AI Active'; el.style.color = 'var(--green)';
+        el.style.borderColor = 'rgba(16,185,129,0.4)';
+      } else {
+        el.textContent = '● Offline Triage Mode'; el.style.color = 'var(--amber)';
+        el.style.borderColor = 'rgba(245,158,11,0.4)';
+      }
+    } catch (e) {}
+  }
+
+  // ── Live trade feed ────────────────────────────────────────────────────────
+  let prevIds = new Set();
+  let livePaused = localStorage.getItem('ts-feed-paused') === 'true';
+
+  function applyPauseUI() {
+    const btn   = document.getElementById('btnPauseFeed');
+    const icon  = document.getElementById('pauseIcon');
+    const label = document.getElementById('pauseLabel');
+    const badge = document.getElementById('pausedBadge');
+    if (!btn) return;
+    if (livePaused) {
+      btn.classList.add('paused'); icon.textContent = '▶'; label.textContent = 'Resume Feed';
+      badge.classList.add('visible');
+    } else {
+      btn.classList.remove('paused'); icon.textContent = '⏸'; label.textContent = 'Pause Feed';
+      badge.classList.remove('visible');
+    }
+  }
+
+  function toggleFeedPause() {
+    livePaused = !livePaused;
+    localStorage.setItem('ts-feed-paused', livePaused);
+    applyPauseUI();
+    if (!livePaused) loadLiveFeed();
+  }
+
+  async function loadLiveFeed() {
+    if (livePaused) return;
+    try {
+      const r = await fetch('/api/trades/live');
+      if (!r.ok) return;
+      const events = await r.json();
+      const tbody = document.getElementById('liveFeedBody');
+      if (!tbody) return;
+      const countEl = document.querySelector('#liveCount strong');
+      if (countEl) countEl.textContent = events.length;
+      if (!events.length) return;
+      tbody.innerHTML = events.slice(0, 50).map(e => {
+        const isNew = !prevIds.has(e.order_id);
+        const cls = isNew ? ' class="flash-new"' : '';
+        const side = e.side === 'BUY'
+          ? '<span style="color:var(--green)">BUY</span>'
+          : '<span style="color:var(--red)">SELL</span>';
+        const t = e.event_time ? toIST(e.event_time) : '';
+        return `<tr${cls}><td>${esc(t)}</td><td>${esc(e.trader_id)}</td><td><strong>${esc(e.symbol)}</strong></td><td>${side}</td><td>${esc(e.quantity)}</td><td>${esc(Number(e.price).toFixed(2))}</td><td>${esc(e.event_type)}</td></tr>`;
+      }).join('');
+      prevIds = new Set(events.map(e => e.order_id));
+    } catch (e) {}
+  }
+
+  // Init pause UI on page load
+  applyPauseUI();
+
+  // ── CSV Upload ─────────────────────────────────────────────────────────────
+  let csvContent = null;
+
+  function toggleUpload() {
+    const body = document.getElementById('uploadBody');
+    const chev = document.getElementById('uploadChevron');
+    body.classList.toggle('open');
+    chev.classList.toggle('open');
+  }
+
+  function onDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('dragover'); }
+  function onDragLeave()  { document.getElementById('dropZone').classList.remove('dragover'); }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) readCsvFile(file);
+  }
+  function onFileSelected(e) {
+    const file = e.target.files[0];
+    if (file) readCsvFile(file);
+  }
+  function readCsvFile(file) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      csvContent = ev.target.result;
+      document.getElementById('uploadFileName').textContent = '✓ ' + file.name + ' (' + (csvContent.split('\n').length - 1) + ' rows)';
+      document.getElementById('btnRunCsv').classList.add('ready');
+      document.getElementById('csvResult').style.display = 'none';
+    };
+    reader.readAsText(file);
+  }
+  async function runCsvUpload() {
+    if (!csvContent) return;
+    const btn = document.getElementById('btnRunCsv');
+    const resultEl = document.getElementById('csvResult');
+    btn.textContent = '⏳ Running…'; btn.classList.remove('ready');
+    resultEl.style.display = 'none';
+    try {
+      const r = await fetch('/api/replay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: csvContent, replayDelayMs: 0 })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Server error');
+      const s = d.summary || d;
+      resultEl.className = '';
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = `✅ Done — <strong>${s.totalEvents ?? '?'}</strong> events · <strong>${s.alertCount ?? '?'}</strong> alerts · <strong>${s.escalated ?? '?'}</strong> escalated · <strong>${s.review ?? '?'}</strong> for review`;
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (err) {
+      resultEl.className = 'error';
+      resultEl.style.display = 'block';
+      resultEl.textContent = '❌ ' + err.message;
+    } finally {
+      btn.textContent = '▶ Run Detection'; btn.classList.add('ready');
+    }
+  }
+
+  // ── Charts ────────────────────────────────────────────────────────────────
+  const CHART_COLORS = ['#6366f1','#ef4444','#f59e0b','#10b981','#3b82f6','#ec4899','#8b5cf6'];
+  let charts = {};
+
+  function mkDoughnut(id, labels, values) {
+    const el = document.getElementById(id); if (!el) return;
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart(el, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data: values, backgroundColor: CHART_COLORS, borderWidth: 0 }] },
+      options: { plugins: { legend: { labels: { color: '#8892a4', boxWidth: 12, font: { size: 11 } } } }, cutout: '65%' }
+    });
+  }
+  function mkBar(id, labels, values) {
+    const el = document.getElementById(id); if (!el) return;
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart(el, {
+      type: 'bar',
+      data: { labels, datasets: [{ data: values, backgroundColor: CHART_COLORS, borderRadius: 4, borderSkipped: false }] },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: '#8892a4', font: { size: 10 } } },
+          y: { grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: '#8892a4', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+  function mkLine(id, labels, values) {
+    const el = document.getElementById(id); if (!el) return;
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart(el, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{ data: values, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#6366f1' }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: '#8892a4', font: { size: 9 }, maxTicksLimit: 8 } },
+          y: { min: 0, max: 100, grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: '#8892a4', font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  async function loadCharts() {
+    try {
+      const r = await fetch('/api/charts/data'); if (!r.ok) return;
+      const d = await r.json();
+      if (d.alertBySeverity)    mkBar('chartSeverity', Object.keys(d.alertBySeverity), Object.values(d.alertBySeverity));
+      if (d.verdictDistribution) mkDoughnut('chartVerdict', Object.keys(d.verdictDistribution), Object.values(d.verdictDistribution));
+      if (d.caseDistribution)    mkDoughnut('chartCases', Object.keys(d.caseDistribution), Object.values(d.caseDistribution));
+      if (d.riskTrend && d.riskTrend.length) {
+        mkLine('chartRisk', d.riskTrend.map(p => p.alertId || ''), d.riskTrend.map(p => p.riskScore));
+      }
+    } catch (e) {}
+  }
+
+  // ── Trigger result toast helpers ──────────────────────────────────────────
+  function showToast(type, title, rows) {
+    const toast = document.getElementById('triggerToast');
+    toast.className = 'visible toast-' + type;
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastBody').innerHTML = rows.map(r => `<div class="toast-row">${r}</div>`).join('');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => { toast.className = ''; }, 12000);
+  }
+
+  // ── Scenario triggers ─────────────────────────────────────────────────────
+  async function trigger(scenario) {
+    if (!livePaused) toggleFeedPause();
+    const btns = document.querySelectorAll('.btn-scenario');
+    btns.forEach(b => b.disabled = true);
+    showToast('warn', '⏳ Running ' + scenario.replace(/_/g,' ') + '…', ['Generating events and running detection…']);
+    try {
+      const r = await fetch('/api/trigger/' + scenario, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) {
+        showToast('err', '❌ Trigger Failed', [d.error || 'Unknown error']);
+        return;
+      }
+      const alerts  = d.alertCount   ?? 0;
+      const events  = d.totalEvents  ?? 0;
+      const esc     = d.escalated    ?? 0;
+      const rev     = d.review       ?? 0;
+      const ign     = d.ignored      ?? 0;
+      const hi      = d.highSeverity ?? 0;
+      const mode    = d.triageMode   ?? '—';
+      if (alerts === 0) {
+        showToast('warn', '⚠ No Alerts Detected', [
+          `<strong>${events}</strong> events processed — no pattern thresholds met.`,
+          'Try triggering the same scenario again, or check the app logs.'
+        ]);
+      } else {
+        showToast('ok', '✅ ' + alerts + ' Alert' + (alerts > 1 ? 's' : '') + ' Detected', [
+          `<strong>${events}</strong> events &nbsp;|&nbsp; <strong>${hi}</strong> high severity`,
+          `Escalated <strong>${esc}</strong> &nbsp;·&nbsp; Review <strong>${rev}</strong> &nbsp;·&nbsp; Ignored <strong>${ign}</strong>`,
+          `Triage via <strong>${mode}</strong>`
+        ]);
+        sessionStorage.setItem('ts-force-fetch', '1');
+        setTimeout(() => window.location.reload(), 3000);
+      }
+    } catch (e) {
+      showToast('err', '❌ Network Error', [e.message, 'Is the server running?']);
+    } finally {
+      btns.forEach(b => b.disabled = false);
+    }
+  }
+
+  // ── Audit filter + search ─────────────────────────────────────────────────
+  let auditFilter = 'ALL';
+
+  function setAuditFilter(type, el) {
+    auditFilter = type;
+    document.querySelectorAll('.audit-filter-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    filterAudit();
+  }
+
+  function filterAudit() {
+    const q = (document.getElementById('auditSearch')?.value || '').toLowerCase();
+    const rows = document.querySelectorAll('#auditBody .audit-row');
+    let visible = 0;
+    rows.forEach(row => {
+      const type = (row.dataset.type || '').toUpperCase();
+      const text = (row.dataset.text || '').toLowerCase();
+      const typeMatch = auditFilter === 'ALL' || type.includes(auditFilter);
+      const textMatch = !q || text.includes(q);
+      const show = typeMatch && textMatch;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    const empty = document.getElementById('auditEmpty');
+    const table = document.getElementById('auditTable');
+    if (empty && table) {
+      empty.style.display = visible === 0 ? 'block' : 'none';
+      table.style.display = visible === 0 ? 'none' : '';
+    }
+  }
+
+  // ── IST formatter ─────────────────────────────────────────────────────────
+  const IST_OPTS_TIME = { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+  const IST_OPTS_FULL = { timeZone: 'Asia/Kolkata', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+
+  function toIST(isoStr) {
+    try { return new Date(isoStr).toLocaleTimeString('en-IN', IST_OPTS_TIME); }
+    catch (e) { return isoStr ? isoStr.substring(11, 19) : ''; }
+  }
+  function toISTFull(isoStr) {
+    try { return new Date(isoStr).toLocaleString('en-IN', IST_OPTS_FULL) + ' IST'; }
+    catch (e) { return isoStr || ''; }
+  }
+
+  // Convert all server-rendered UTC timestamps in table cells to IST
+  function convertPageTimestamps() {
+    // audit-ts cells (audit trail page)
+    document.querySelectorAll('.audit-ts').forEach(td => {
+      const raw = td.textContent.trim();
+      if (raw && raw.includes('T') && raw.includes('Z')) td.textContent = toISTFull(raw);
+    });
+    // Any <td> or <code> holding a bare ISO string in other tables (cases, watchlist)
+    document.querySelectorAll('td, code').forEach(el => {
+      const raw = el.textContent.trim();
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(raw)) el.textContent = toISTFull(raw);
+    });
+  }
+
+  // ── Utility ───────────────────────────────────────────────────────────────
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ── Forced one-time fetch (scenario was just triggered while feed was paused) ─
+  async function forceFetchOnce() {
+    try {
+      const r = await fetch('/api/trades/live');
+      if (!r.ok) return;
+      const events = await r.json();
+      const tbody = document.getElementById('liveFeedBody');
+      if (!tbody || !events.length) return;
+      const countEl = document.querySelector('#liveCount strong');
+      if (countEl) countEl.textContent = events.length;
+      tbody.innerHTML = events.slice(0, 50).map(e => {
+        const side = e.side === 'BUY'
+          ? '<span style="color:var(--green)">BUY</span>'
+          : '<span style="color:var(--red)">SELL</span>';
+        const t = e.event_time ? toIST(e.event_time) : '';
+        return `<tr class="flash-new"><td>${esc(t)}</td><td>${esc(e.trader_id)}</td><td><strong>${esc(e.symbol)}</strong></td><td>${side}</td><td>${esc(e.quantity)}</td><td>${esc(Number(e.price).toFixed(2))}</td><td>${esc(e.event_type)}</td></tr>`;
+      }).join('');
+      prevIds = new Set(events.map(e => e.order_id));
+    } catch (e) {}
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  loadHealth();
+  loadCharts();
+  // If a scenario was just triggered while paused, fetch once to show the data
+  if (sessionStorage.getItem('ts-force-fetch')) {
+    sessionStorage.removeItem('ts-force-fetch');
+    forceFetchOnce();
+  } else {
+    loadLiveFeed();
+  }
+  convertPageTimestamps();
+  setInterval(loadLiveFeed, 3000);
+  setInterval(loadCharts, 10000);
+</script>
+</body>
+</html>
