@@ -125,3 +125,134 @@ NEW, MODIFY, CANCEL, EXECUTE
 - No real exchange feed, Kafka, database, Slack, Jira, or case-management integration.
 - Baselines are computed from replay data, not a historical 30-day warehouse.
 - Offline triage is deterministic and demo-safe; Claude triage requires network and a valid API key.
+
+How to Run
+
+
+
+Option 1 — Gradle (recommended)
+
+
+
+cd D:\Hackathon\trade-sentinel
+.\gradlew.bat bootRun
+
+
+
+Option 2 — Fat JAR
+
+
+
+cd D:\Hackathon\trade-sentinel
+.\gradlew.bat bootJar
+java -jar build\libs\trade-sentinel-0.0.1-SNAPSHOT.jar
+
+
+
+Default port: http://localhost:8080
+Dashboard: Open http://localhost:8080 in a browser — interactive UI included.
+
+
+
+Optional env var (enables Claude AI triage; offline fallback used if absent):
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+
+
+
+---
+All Endpoints
+
+
+
+┌────────┬──────────────────┬──────────────────────────────────────────────────────────┐
+│ Method │     Endpoint     │                       Description                        │
+├────────┼──────────────────┼──────────────────────────────────────────────────────────┤
+│ GET    │ /                │ Interactive dashboard (HTML — open in browser)           │
+├────────┼──────────────────┼──────────────────────────────────────────────────────────┤
+│ GET    │ /api/health      │ Runtime status + whether Claude is configured            │
+├────────┼──────────────────┼──────────────────────────────────────────────────────────┤
+│ GET    │ /api/sample      │ Returns the built-in sample CSV for copy-paste           │
+├────────┼──────────────────┼──────────────────────────────────────────────────────────┤
+│ GET    │ /api/sample-json │ Returns the 103-order JSON dataset                       │
+├────────┼──────────────────┼──────────────────────────────────────────────────────────┤
+│ POST   │ /api/replay      │ Full pipeline from CSV body → detect → triage → escalate │
+├────────┼──────────────────┼──────────────────────────────────────────────────────────┤
+│ POST   │ /api/replay-json │ Full pipeline from JSON body (surveillance format)       │
+└────────┴──────────────────┴──────────────────────────────────────────────────────────┘
+
+
+
+---
+Endpoint Details
+
+
+
+GET /api/health
+{"ok": true, "claudeConfigured": true}
+
+
+
+POST /api/replay — body: {"csv": "..."} or {} (uses sample)
+
+
+
+POST /api/replay — body: {"csv": "..."} or {} (uses sample)
+{
+  "summary": {
+    "eventsIngested": 37,
+    "alertsGenerated": 3,
+    "highSeverity": 3,
+    "escalated": 3,
+    "review": 0,
+    "ignored": 0,
+    "triageSource": "claude"
+  },
+  "alerts": [
+    {
+      "alert": { "alert_id": "A-0001", "pattern": "Layering / Spoofing",
+                 "trader_id": "T-4821", "symbol": "HDFCBANK",
+                 "severity": "HIGH", "score": 99 },
+      "triage": { "verdict": "ESCALATE", "confidence": 96 }
+    }
+  ],
+  "escalations": [
+    { "alertId": "A-0001", "actions": [
+      { "type": "CASE_CREATED", "owner": "Surveillance Desk L2", "priority": "P1", "sla": "2 hours" },
+      { "type": "NOTIFICATION", "target": "compliance-ops", "sla": "15 minutes" },
+      { "type": "WATCHLIST_UPDATE", "target": "T-4821", "sla": "72 hours" }
+    ]}
+  ]
+}
+
+
+
+POST /api/replay-json — body: JSON with "orders": [...] array
+- Detected the 2 planted patterns from the 103-order dataset:
+  - A-0001 — Layering/Spoofing — T-1042 / HDFCBANK (score 99)
+  - A-0002 — Spoofing — T-1087 / RELIANCE (score 95) ← new detector from surveillance merge
+
+
+
+GET /api/replay bad input → structured error
+{"error": "Missing CSV columns: order_id, trader_id, ..."}
+
+
+
+---
+Detected Pattern Types
+
+
+
+┌────────────────────────┬──────────────────────────────────────────────────────────────────────────────┐
+│        Pattern         │                                   Trigger                                    │
+├────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤
+│ Layering / Spoofing    │ ≥6 large orders (qty ≥25k) with cancel ratio ≥70% and median cancel time     │
+│                        │ ≤1500ms                                                                      │
+├────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤
+│ Spoofing               │ Single order ≥5× trader baseline, cancelled ≤2s, no fill                     │
+│ (single-order)         │                                                                              │
+├────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤
+│ Wash Trading           │ ≥3 buy↔sell execution cycles within 60s with <15% size delta                 │
+├────────────────────────┼──────────────────────────────────────────────────────────────────────────────┤
+│ Momentum Ignition      │ ≥5 same-side executions with ≥1% price move and ≥30k qty in 90s              │
+└────────────────────────┴──────────────────────────────────────────────────────────────────────────────┘
