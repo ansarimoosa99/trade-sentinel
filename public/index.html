@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trade Sentinel</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #18202a;
+      --muted: #5f6b7a;
+      --line: #d9dee7;
+      --accent: #0f766e;
+      --accent-2: #b45309;
+      --danger: #b42318;
+      --ok: #157347;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    h1 { font-size: 22px; margin: 0; letter-spacing: 0; }
+    main {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      min-height: calc(100vh - 69px);
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      padding: 18px;
+    }
+    section { padding: 20px 24px 32px; }
+    textarea {
+      width: 100%;
+      min-height: 420px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    button {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary { background: #334155; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .toolbar { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; }
+    .status { color: var(--muted); font-size: 13px; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .stat, .alert, .case-row {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .stat strong { display: block; font-size: 26px; margin-bottom: 4px; }
+    .stat span, .label { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 16px;
+      align-items: start;
+    }
+    .alert { margin-bottom: 12px; }
+    .alert-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .alert h2 { font-size: 17px; margin: 0 0 3px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .pill.high, .pill.escalate { background: #fee4e2; color: var(--danger); }
+    .pill.medium, .pill.review { background: #fef0c7; color: var(--accent-2); }
+    .pill.ignore { background: #dcfce7; color: var(--ok); }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .metric { border-top: 1px solid var(--line); padding-top: 8px; }
+    .metric strong { display: block; font-size: 16px; }
+    .reason {
+      background: #f8fafc;
+      border-left: 4px solid var(--accent);
+      padding: 10px 12px;
+      margin-top: 10px;
+      color: #263241;
+    }
+    .case-row { margin-bottom: 10px; }
+    .case-row div { margin-top: 5px; color: var(--muted); font-size: 13px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: table;
+    }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 13px;
+    }
+    th { color: var(--muted); background: #f8fafc; }
+    @media (max-width: 980px) {
+      main, .grid { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Trade Sentinel</h1>
+    <div class="status" id="health">Checking Claude configuration...</div>
+  </header>
+  <main>
+    <aside>
+      <div class="label">CSV Ingestion</div>
+      <div class="toolbar">
+        <button id="sampleBtn" class="secondary">Load Sample</button>
+        <button id="runBtn">Run Replay</button>
+      </div>
+      <textarea id="csvInput" spellcheck="false"></textarea>
+      <p class="status">Replay runs through ingestion, detection, Claude-compatible triage, and escalation.</p>
+    </aside>
+    <section>
+      <div class="stats" id="stats"></div>
+      <div class="grid">
+        <div>
+          <div class="label">Alerts & Triage</div>
+          <div id="alerts"></div>
+          <div class="label">Recent Event Replay</div>
+          <div id="events"></div>
+        </div>
+        <div>
+          <div class="label">Automation</div>
+          <div id="cases"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const csvInput = document.querySelector("#csvInput");
+    const sampleBtn = document.querySelector("#sampleBtn");
+    const runBtn = document.querySelector("#runBtn");
+    const statsEl = document.querySelector("#stats");
+    const alertsEl = document.querySelector("#alerts");
+    const eventsEl = document.querySelector("#events");
+    const casesEl = document.querySelector("#cases");
+    const healthEl = document.querySelector("#health");
+
+    async function loadSample() {
+      const response = await fetch("/api/sample");
+      const data = await response.json();
+      csvInput.value = data.csv;
+    }
+
+    async function loadHealth() {
+      const response = await fetch("/api/health");
+      const data = await response.json();
+      healthEl.textContent = data.claudeConfigured
+        ? "Claude API configured"
+        : "Offline triage mode - set ANTHROPIC_API_KEY for Claude";
+    }
+
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+      }[char]));
+    }
+
+    function renderStats(summary) {
+      const items = [
+        ["Events", summary.eventsIngested],
+        ["Alerts", summary.alertsGenerated],
+        ["Escalated", summary.escalated],
+        ["Triage", summary.triageSource]
+      ];
+      statsEl.innerHTML = items.map(([label, value]) => `
+        <div class="stat"><strong>${esc(value)}</strong><span>${esc(label)}</span></div>
+      `).join("");
+    }
+
+    function renderAlerts(alerts) {
+      if (!alerts.length) {
+        alertsEl.innerHTML = "<p class='status'>No alerts generated.</p>";
+        return;
+      }
+      alertsEl.innerHTML = alerts.map(item => {
+        const alert = item.alert;
+        const triage = item.triage;
+        const metrics = Object.entries(alert.metrics).map(([key, value]) => `
+          <div class="metric"><span class="label">${esc(key)}</span><strong>${esc(value)}</strong></div>
+        `).join("");
+        return `
+          <article class="alert">
+            <div class="alert-head">
+              <div>
+                <h2>${esc(alert.pattern)} - ${esc(alert.symbol)}</h2>
+                <div class="status">${esc(alert.alert_id)} | Trader ${esc(alert.trader_id)} | Account ${esc(alert.account_id)}</div>
+              </div>
+              <div>
+                <span class="pill ${alert.severity.toLowerCase()}">${esc(alert.severity)}</span>
+                <span class="pill ${triage.verdict.toLowerCase()}">${esc(triage.verdict)}</span>
+              </div>
+            </div>
+            <div class="metrics">${metrics}</div>
+            <div class="reason">
+              <strong>${esc(triage.confidence)}% confidence</strong>,
+              ${esc(triage.false_positive_probability)}% false-positive probability.
+              ${esc(triage.reason)}
+              <div class="status">Source: ${esc(triage.source)}</div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderCases(escalations) {
+      casesEl.innerHTML = escalations.map(item => `
+        <div class="case-row">
+          <strong>${esc(item.alertId)}</strong>
+          ${item.actions.map(action => `
+            <div>${esc(action.type)}: ${esc(action.target)} (${esc(action.status)})</div>
+          `).join("")}
+        </div>
+      `).join("") || "<p class='status'>No automation actions yet.</p>";
+    }
+
+    function renderEvents(events) {
+      const rows = events.slice(-12).map(event => `
+        <tr>
+          <td>${esc(event.event_time)}</td>
+          <td>${esc(event.trader_id)}</td>
+          <td>${esc(event.symbol)}</td>
+          <td>${esc(event.side)}</td>
+          <td>${esc(event.quantity)}</td>
+          <td>${esc(event.event_type)}</td>
+        </tr>
+      `).join("");
+      eventsEl.innerHTML = `
+        <table>
+          <thead><tr><th>Time</th><th>Trader</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    async function runReplay() {
+      runBtn.disabled = true;
+      runBtn.textContent = "Running...";
+      try {
+        const response = await fetch("/api/replay", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ csv: csvInput.value, replayDelayMs: 0 })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Replay failed");
+        renderStats(data.summary);
+        renderAlerts(data.alerts);
+        renderCases(data.escalations);
+        renderEvents(data.events);
+      } catch (error) {
+        alertsEl.innerHTML = `<p class="status">${esc(error.message)}</p>`;
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = "Run Replay";
+      }
+    }
+
+    sampleBtn.addEventListener("click", loadSample);
+    runBtn.addEventListener("click", runReplay);
+    loadHealth();
+    loadSample().then(runReplay);
+  </script>
+</body>
+</html>
