@@ -26,7 +26,10 @@ public class PipelineService {
   }
 
   public PipelineResult run(String csvText, int replayDelayMs) {
-    List<OrderEvent> events = parser.parse(csvText);
+    return runFromEvents(parser.parse(csvText), replayDelayMs);
+  }
+
+  public PipelineResult runFromEvents(List<OrderEvent> events, int replayDelayMs) {
     if (replayDelayMs > 0) {
       events.forEach(ignored -> sleep(replayDelayMs));
     }

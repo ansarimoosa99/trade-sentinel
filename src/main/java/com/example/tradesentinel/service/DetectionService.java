@@ -9,8 +9,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +28,7 @@ public class DetectionService {
     SurveillanceBaseline baseline = baselineService.analyze(events);
     List<Alert> rawAlerts = Stream.of(
             detectLayering(events, baseline),
+            detectSpoofing(events, baseline),
             detectWashTrading(events, baseline),
             detectMomentumIgnition(events, baseline))
         .flatMap(List::stream)
@@ -87,7 +90,7 @@ public class DetectionService {
       List<OrderEvent> oppositeExecs = executions.stream()
           .filter(event -> traderId.equals(event.traderId()) && symbol.equals(event.symbol()) && oppositeSide.equals(event.side()))
           .toList();
-      if (cancelRatio < 0.7 || medianCancelMs > 2000) {
+      if (cancelRatio < 0.7 || medianCancelMs > 1500) {
         continue;
       }
 
@@ -113,6 +116,83 @@ public class DetectionService {
               "largeCancelledOrders", largeOrders.size(),
               "oppositeSideExecutions", oppositeExecs.size(),
               "dominantCancelledSide", dominantSide),
+          evidence,
+          Instant.now()));
+    }
+    return alerts;
+  }
+
+  private List<Alert> detectSpoofing(List<OrderEvent> events, SurveillanceBaseline baseline) {
+    Map<String, OrderEvent> newByOrderId = new HashMap<>();
+    Map<String, OrderEvent> cancelByOrderId = new HashMap<>();
+    Set<String> executedOrderIds = new HashSet<>();
+
+    for (OrderEvent event : events) {
+      switch (event.eventType()) {
+        case "NEW" -> newByOrderId.put(event.orderId(), event);
+        case "CANCEL" -> cancelByOrderId.put(event.orderId(), event);
+        case "EXECUTE" -> executedOrderIds.add(event.orderId());
+      }
+    }
+
+    Map<String, List<SpoofCandidate>> byTraderSymbol = new HashMap<>();
+    for (Map.Entry<String, OrderEvent> entry : cancelByOrderId.entrySet()) {
+      String orderId = entry.getKey();
+      if (executedOrderIds.contains(orderId)) {
+        continue;
+      }
+      OrderEvent cancel = entry.getValue();
+      OrderEvent newEvent = newByOrderId.get(orderId);
+      if (newEvent == null) {
+        continue;
+      }
+      double cancelMs = Duration.between(newEvent.eventTime(), cancel.eventTime()).toNanos() / 1_000_000.0;
+      if (cancelMs < 0 || cancelMs > 2000) {
+        continue;
+      }
+      String key = cancel.traderId() + "|" + cancel.symbol();
+      byTraderSymbol.computeIfAbsent(key, ignored -> new ArrayList<>())
+          .add(new SpoofCandidate(newEvent, cancel, cancelMs));
+    }
+
+    List<Alert> alerts = new ArrayList<>();
+    for (Map.Entry<String, List<SpoofCandidate>> entry : byTraderSymbol.entrySet()) {
+      List<SpoofCandidate> candidates = entry.getValue();
+      OrderEvent first = candidates.getFirst().newEvent();
+      TraderSymbolStats stats = baseline.statsFor(first.traderId(), first.symbol());
+      double avgQty = Math.max(stats.averageExecutionQuantity(), 1000);
+
+      List<SpoofCandidate> spoof = candidates.stream()
+          .filter(c -> c.newEvent().quantity() >= 5.0 * avgQty)
+          .toList();
+      if (spoof.isEmpty()) {
+        continue;
+      }
+
+      double avgCancelMs = spoof.stream().mapToDouble(SpoofCandidate::cancelMs).average().orElse(0);
+      double avgSizeMultiplier = spoof.stream()
+          .mapToDouble(c -> c.newEvent().quantity() / avgQty)
+          .average().orElse(0);
+      int score = Math.min(95, (int) (60 + avgSizeMultiplier * 4 + spoof.size() * 5
+          + Math.max(0, 10 - avgCancelMs / 200)));
+      List<OrderEvent> evidence = spoof.stream()
+          .flatMap(c -> Stream.of(c.newEvent(), c.cancel()))
+          .limit(10)
+          .toList();
+      alerts.add(new Alert(
+          "AS-%04d".formatted(alerts.size() + 1),
+          "Spoofing",
+          first.traderId(),
+          first.accountId(),
+          first.symbol(),
+          score >= 80 ? "HIGH" : "MEDIUM",
+          score,
+          Map.of(
+              "spoofOrderCount", spoof.size(),
+              "avgCancelTimeMs", Math.round(avgCancelMs),
+              "avgSizeMultiplier", round(avgSizeMultiplier, 1),
+              "baselineAvgQuantity", Math.round(avgQty),
+              "fillRate", 0),
           evidence,
           Instant.now()));
     }
@@ -250,5 +330,6 @@ public class DetectionService {
   }
 
   private record CancelledOrder(OrderEvent newEvent, OrderEvent cancel, double ageMs) {}
+  private record SpoofCandidate(OrderEvent newEvent, OrderEvent cancel, double cancelMs) {}
   private record WashCycle(OrderEvent left, OrderEvent right, long seconds) {}
 }

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class TriageService {
-  private static final String DEFAULT_MODEL = "claude-3-5-sonnet-latest";
+  private static final String DEFAULT_MODEL = "claude-sonnet-4-20250514";
 
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
