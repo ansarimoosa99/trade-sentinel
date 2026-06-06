@@ -1,0 +1,65 @@
+# Gradle
+build/
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Logs
+*.log
+logs/
+app.log
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# Spring Boot
+application-local.properties
+application-local.yml
+
+# Compiled classes
+*.class
+
+# Package files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# Misc
+*.tmp
+.LSOverride
