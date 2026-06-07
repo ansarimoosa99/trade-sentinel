@@ -1,0 +1,33 @@
+# Build outputs
+build/
+target/
+.gradle/
+out/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Secrets — never bake .env into the image
+.env
+*.env
+
+# Logs
+logs/
+*.log
+D:/logs/
+
+# Git
+.git/
+.gitignore
+
+# Docs (not needed at runtime)
+docs/
+README.md
+
+# Test reports
+build/reports/
+build/test-results/
