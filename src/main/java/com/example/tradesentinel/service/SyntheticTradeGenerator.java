@@ -28,14 +28,15 @@ public class SyntheticTradeGenerator {
     }
 
     public Scenario pickScenario() {
+        // Tuned for a 3-minute demo (60 ticks × 3 s):
+        //   ~3 attack ticks → ~3 new alerts → ~2-3 compliance cases
         int roll = rng.nextInt(100);
-        if (roll < 60) return Scenario.NORMAL;
-        if (roll < 68) return Scenario.LAYERING;
-        if (roll < 76) return Scenario.SPOOFING;
-        if (roll < 84) return Scenario.WASH_TRADING;
-        if (roll < 90) return Scenario.FRONT_RUNNING;
-        if (roll < 95) return Scenario.MOMENTUM_IGNITION;
-        return Scenario.PUMP_AND_DUMP;
+        if (roll < 95) return Scenario.NORMAL;              // 95%
+        if (roll < 97) return Scenario.LAYERING;            // 2%  → P0 case + notify + watchlist
+        if (roll < 98) return Scenario.WASH_TRADING;        // 1%  → P1 case + notify
+        if (roll < 99) return Scenario.SPOOFING;            // 1%  → P1 case
+        return Scenario.MOMENTUM_IGNITION;                  // 1%  → P1 case
+        // FRONT_RUNNING and PUMP_AND_DUMP available via manual trigger buttons
     }
 
     public List<OrderEvent> generate(Scenario scenario) {

@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
@@ -36,8 +37,11 @@ public class DetectionService {
         .flatMap(List::stream)
         .toList();
     List<Alert> alerts = new ArrayList<>();
-    for (int i = 0; i < rawAlerts.size(); i++) {
-      alerts.add(rawAlerts.get(i).withAlertId("A-%04d".formatted(i + 1)));
+    for (Alert raw : rawAlerts) {
+      // UUID-based IDs guarantee uniqueness across every scheduler tick and restart.
+      // Batch-local sequences like A-0001 collide with DB entries and get silently dropped.
+      String uid = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+      alerts.add(raw.withAlertId("A-" + uid));
     }
     return alerts;
   }

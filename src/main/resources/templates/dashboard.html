@@ -253,6 +253,18 @@
     .audit-desc { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
     .audit-ts   { font-size: 11px; color: var(--muted); white-space: nowrap; }
 
+    /* ── Audit pagination ── */
+    .audit-pagination { display:flex; align-items:center; gap:12px; margin-top:12px; font-size:12px; color:var(--muted); }
+    .audit-pagination button { padding:4px 12px; border:1px solid var(--border); background:var(--panel2); color:var(--text); border-radius:5px; cursor:pointer; font-size:12px; transition:background 0.15s; }
+    .audit-pagination button:hover:not(:disabled) { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .audit-pagination button:disabled { opacity:0.4; cursor:default; }
+
+    /* ── Event notification toasts ── */
+    #eventToastContainer { position:fixed; bottom:80px; right:24px; z-index:998; display:flex; flex-direction:column-reverse; gap:8px; max-width:380px; pointer-events:none; }
+    .event-toast { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; padding:10px 14px; box-shadow:0 4px 16px rgba(0,0,0,0.3); font-size:12px; animation:slideUp 0.2s ease-out; pointer-events:auto; }
+    .event-toast .et-title { display:flex; align-items:center; gap:6px; font-weight:700; margin-bottom:3px; }
+    .event-toast .et-desc { color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:340px; }
+
     /* ── Live feed flash ── */
     @keyframes flashNew { from { background: rgba(99,102,241,0.18); } to { background: transparent; } }
     .flash-new { animation: flashNew 2s ease-out; }
@@ -369,11 +381,11 @@
       <table class="matrix-table">
         <thead><tr><th>Risk Score</th><th>Verdict</th><th>Automatic Action</th></tr></thead>
         <tbody>
-          <tr><td>0 – 40</td><td><span class="badge badge-ignore">FALSE POSITIVE</span></td><td>Ignore</td></tr>
-          <tr><td>41 – 70</td><td><span class="badge badge-review">REVIEW</span></td><td>Analyst Queue</td></tr>
-          <tr><td>71 – 85</td><td><span class="badge badge-real">REAL ALERT</span></td><td>Create Compliance Case</td></tr>
-          <tr><td>86 – 95</td><td><span class="badge badge-real">REAL ALERT</span></td><td>Case + Notification</td></tr>
-          <tr><td>96 – 100</td><td><span class="badge badge-real">REAL ALERT</span></td><td>Case + Notification + Watchlist</td></tr>
+          <tr><td>0 – 42</td><td><span class="badge badge-ignore">FALSE POSITIVE</span></td><td>Ignored — no action</td></tr>
+          <tr><td>43 – 81</td><td><span class="badge badge-review">REVIEW</span></td><td>Analyst review queue — no formal case</td></tr>
+          <tr><td>82 – 87</td><td><span class="badge badge-real">REAL ALERT</span></td><td>P1 Compliance Case → Surveillance L2</td></tr>
+          <tr><td>88 – 95</td><td><span class="badge badge-real">REAL ALERT</span></td><td>P1 Case + Email + Slack Notification</td></tr>
+          <tr><td>96 – 100 / Score ≥ 99</td><td><span class="badge badge-real">REAL ALERT</span></td><td>P0 Case + Notification + Watchlist Add</td></tr>
         </tbody>
       </table>
     </div>
@@ -393,53 +405,9 @@
     <button class="btn-scenario" onclick="trigger('PUMP_AND_DUMP')">Pump &amp; Dump</button>
   </div>
 
-  <div th:if="${alerts.empty}" class="empty" style="margin-top:40px">
-    No alerts yet — trigger a scenario or wait for the scheduler to generate suspicious activity.
-  </div>
-
-  <div th:each="alert : ${alerts}" style="margin-bottom:16px; border:1px solid var(--border); border-radius:8px; background:var(--panel); overflow:hidden;">
-    <div style="padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
-      <div>
-        <div style="font-weight:700; font-size:15px;" th:text="${alert.pattern + ' — ' + alert.symbol}">Pattern</div>
-        <div style="color:var(--muted); font-size:12px; margin-top:3px;">
-          <span th:text="${alert.alertId}"></span> |
-          Trader <span th:text="${alert.traderId}"></span> |
-          Score <strong th:text="${alert.score}"></strong>
-        </div>
-      </div>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <span th:class="'badge badge-' + ${alert.severity.toLowerCase()}" th:text="${alert.severity}"></span>
-        <span th:with="rs=${alert.riskScore}"
-              th:style="'background:' + (${rs >= 86} ? 'rgba(239,68,68,0.15)' : (${rs >= 71} ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)')) + '; color:' + (${rs >= 86} ? '#ef4444' : (${rs >= 71} ? '#f59e0b' : '#10b981')) + '; border:1px solid ' + (${rs >= 86} ? 'rgba(239,68,68,0.3)' : (${rs >= 71} ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'))"
-              class="risk-pill">
-          Risk: <span th:text="${alert.riskScore}"></span>
-        </span>
-        <span th:if="${triageByAlert.containsKey(alert.alertId)}"
-              th:with="v=${triageByAlert[alert.alertId].verdict}"
-              th:class="'badge ' + (${v == 'ESCALATE'} ? 'badge-escalate' : (${v == 'REVIEW'} ? 'badge-review' : 'badge-ignore'))"
-              th:text="${v}"></span>
-      </div>
-    </div>
-
-    <div th:if="${triageByAlert.containsKey(alert.alertId)}" th:with="t=${triageByAlert[alert.alertId]}" class="explain-panel" style="margin:12px 16px;">
-      <h4>AI Explainability Panel</h4>
-      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
-        <div><div style="font-size:11px; color:var(--muted);">PATTERN</div><strong th:text="${alert.pattern}"></strong></div>
-        <div>
-          <div style="font-size:11px; color:var(--muted);">CONFIDENCE</div>
-          <div class="conf-bar">
-            <span th:text="${t.confidence + '%'}"></span>
-            <div class="conf-track"><div class="conf-fill" th:style="'width:' + ${t.confidence} + '%'"></div></div>
-          </div>
-        </div>
-        <div><div style="font-size:11px; color:var(--muted);">FP PROBABILITY</div><span th:text="${t.fpProbability + '%'}"></span></div>
-        <div><div style="font-size:11px; color:var(--muted);">TRIAGE SOURCE</div><code style="font-size:11px; color:var(--accent2);" th:text="${t.source}"></code></div>
-      </div>
-      <div class="case-note" th:text="${t.caseNote}"></div>
-    </div>
-    <div style="padding:0 16px 14px; color:var(--muted); font-size:12px;" th:if="${!triageByAlert.containsKey(alert.alertId)}">
-      Triage pending...
-    </div>
+  <!-- JS-driven live container — auto-refreshes every 8 s -->
+  <div id="alertsContainer">
+    <div class="empty" style="margin-top:40px">Loading alerts…</div>
   </div>
 </div>
 
@@ -447,19 +415,21 @@
 <!-- TAB: Cases                                                                 -->
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 <div th:if="${tab == 'cases'}" class="page active">
-  <div th:if="${cases.empty}" class="empty">No compliance cases yet.</div>
-  <div class="table-wrap" th:if="${!cases.empty}">
+  <!-- JS-driven live table — auto-refreshes every 8 s -->
+  <div class="table-wrap">
     <table>
-      <thead><tr><th>Case ID</th><th>Alert ID</th><th>Status</th><th>Priority</th><th>Assigned To</th><th>Created</th></tr></thead>
-      <tbody>
-        <tr th:each="c : ${cases}">
-          <td><code th:text="${c.caseId}"></code></td>
-          <td><code th:text="${c.alertId}"></code></td>
-          <td><span th:class="'badge ' + (${c.status == 'OPEN'} ? 'badge-open' : 'badge-closed')" th:text="${c.status}"></span></td>
-          <td th:text="${c.priority}"></td>
-          <td th:text="${c.assignedTo}"></td>
-          <td th:text="${c.createdAt}"></td>
+      <thead>
+        <tr>
+          <th>Case ID</th>
+          <th>Source Alert ID</th>
+          <th>Status</th>
+          <th>Priority</th>
+          <th>Assigned To</th>
+          <th>Created</th>
         </tr>
+      </thead>
+      <tbody id="casesBody">
+        <tr><td colspan="6" class="empty">Loading cases…</td></tr>
       </tbody>
     </table>
   </div>
@@ -469,10 +439,10 @@
 <!-- TAB: Watchlist                                                             -->
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 <div th:if="${tab == 'watchlist'}" class="page active">
-  <div th:if="${watchlist.empty}" class="empty">No traders on watchlist yet.</div>
+  <div th:if="${watchlist.empty}" class="empty">No traders on watchlist yet. Layering alerts (score 99) auto-add traders.</div>
   <div class="table-wrap" th:if="${!watchlist.empty}">
     <table>
-      <thead><tr><th>Trader ID</th><th>Risk Score</th><th>Alert Count</th><th>Status</th><th>Reason</th><th>Added</th></tr></thead>
+      <thead><tr><th>Trader ID</th><th>Risk Score</th><th>Alerts</th><th>Status</th><th>Source Alert &amp; Reason</th><th>Added</th></tr></thead>
       <tbody>
         <tr th:each="w : ${watchlist}">
           <td><strong th:text="${w.traderId}"></strong></td>
@@ -485,7 +455,7 @@
           </td>
           <td th:text="${w.alertCount}"></td>
           <td><span th:class="'badge badge-' + ${w.status.toLowerCase()}" th:text="${w.status}"></span></td>
-          <td th:text="${w.addedReason}"></td>
+          <td style="font-size:12px; max-width:320px;" th:text="${w.addedReason}"></td>
           <td th:text="${w.addedAt}"></td>
         </tr>
       </tbody>
@@ -509,9 +479,9 @@
     <span class="audit-type-chip chip-suppress">🔇 Suppressed</span>
   </div>
 
-  <!-- Toolbar: search + filters -->
+  <!-- Toolbar: search + filters (server-side) -->
   <div class="audit-toolbar">
-    <input class="audit-search" id="auditSearch" type="text" placeholder="Search by alert ID, actor, or description…" oninput="filterAudit()">
+    <input class="audit-search" id="auditSearch" type="text" placeholder="Search all DB records by alert ID, actor, or description…" oninput="onAuditSearch(this.value)">
     <button class="audit-filter-btn active" data-filter="ALL"    onclick="setAuditFilter('ALL',    this)">All</button>
     <button class="audit-filter-btn"        data-filter="ALERT"  onclick="setAuditFilter('ALERT',  this)">Alerts</button>
     <button class="audit-filter-btn"        data-filter="TRIAGE" onclick="setAuditFilter('TRIAGE', this)">Triage</button>
@@ -532,39 +502,12 @@
         </tr>
       </thead>
       <tbody id="auditBody">
-        <tr th:each="a : ${auditEvents}"
-            th:with="cat=${#strings.containsIgnoreCase(a.eventType,'ALERT') ? 'alert' :
-                          (#strings.containsIgnoreCase(a.eventType,'TRIAGE') ? 'triage' :
-                          (#strings.containsIgnoreCase(a.eventType,'CASE') ? 'case' :
-                          (#strings.containsIgnoreCase(a.eventType,'WATCH') ? 'watch' :
-                          (#strings.containsIgnoreCase(a.eventType,'NOTIF') ? 'notif' : 'suppress'))))},
-                    label=${a.eventType == 'ALERT_CREATED' ? '🚨 Alert Created' :
-                            (a.eventType == 'ALERT_IGNORED' ? '🔇 Alert Ignored' :
-                            (a.eventType == 'TRIAGE_COMPLETE' ? '🤖 Triage Complete' :
-                            (a.eventType == 'CASE_CREATED' ? '📁 Case Created' :
-                            (a.eventType == 'WATCHLIST_AUTO_ADD' ? '👁 Watchlist Add' :
-                            (a.eventType == 'WATCHLIST_UPDATED' ? '👁 Watchlist Update' :
-                            (a.eventType == 'NOTIFICATION_SENT' ? '🔔 Notification' :
-                            (a.eventType == 'RISK_SCORED' ? '📊 Risk Scored' : a.eventType)))))))}"
-            th:data-type="${a.eventType}"
-            th:data-text="${(a.alertId ?: '') + ' ' + (a.eventType ?: '') + ' ' + (a.actor ?: '') + ' ' + (a.description ?: '')}"
-            th:class="'audit-row audit-' + ${cat}">
-          <td class="audit-ts" th:text="${a.eventTime}"></td>
-          <td>
-            <span th:class="'audit-type-chip chip-' + ${cat}" th:text="${label}"></span>
-          </td>
-          <td><code style="font-size:11px;" th:text="${a.alertId ?: '—'}"></code></td>
-          <td style="font-size:12px;" th:text="${a.actor}"></td>
-          <td class="audit-desc" th:title="${a.description}" th:text="${a.description}"></td>
-        </tr>
-        <tr th:if="${auditEvents.empty}">
-          <td colspan="5" class="empty">No audit events yet.</td>
-        </tr>
+        <tr><td colspan="5" class="empty">Loading audit events…</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div id="auditEmpty" style="display:none;" class="empty">No events match your filter.</div>
+  <div id="auditPagination" class="audit-pagination"></div>
 </div>
 
 <!-- ── Trigger result toast (shown after any Generate button) ── -->
@@ -573,6 +516,9 @@
   <div class="toast-title" id="toastTitle">Running…</div>
   <div id="toastBody"></div>
 </div>
+
+<!-- ── Event notification toasts (background events) ── -->
+<div id="eventToastContainer"></div>
 
 <!-- ══════════════════════════════════════════════════════════════════════════ -->
 <!-- JavaScript                                                                  -->
@@ -830,35 +776,273 @@
     }
   }
 
-  // ── Audit filter + search ─────────────────────────────────────────────────
+  // ── Alerts live refresh ──────────────────────────────────────────────────
+  function fmtSource(src) {
+    if (!src) return 'Rule-Based Fallback';
+    if (src.startsWith('claude:')) return 'Claude Sonnet';
+    if (src.startsWith('fallback') || src.includes('error')) return 'AI Triage Engine';
+    return 'Rule-Based Fallback';
+  }
+
+  function riskColor(rs) {
+    if (rs >= 88) return { bg:'rgba(239,68,68,0.15)',   col:'#ef4444', border:'rgba(239,68,68,0.3)' };
+    if (rs >= 82) return { bg:'rgba(245,158,11,0.15)',  col:'#f59e0b', border:'rgba(245,158,11,0.3)' };
+    return              { bg:'rgba(16,185,129,0.15)',  col:'#10b981', border:'rgba(16,185,129,0.3)' };
+  }
+
+  function verdictBadge(v) {
+    if (!v) return '';
+    const cls = v === 'ESCALATE' ? 'badge-escalate' : v === 'REVIEW' ? 'badge-review' : 'badge-ignore';
+    return `<span class="badge ${cls}">${esc(v)}</span>`;
+  }
+
+  function renderAlertCard(a) {
+    const rc = riskColor(a.riskScore || 0);
+    const sevCls = 'badge badge-' + (a.severity || 'medium').toLowerCase();
+    const aid = esc(a.alertId || '');
+    const t = a.triage;
+    const triagePanel = t ? `
+      <div class="explain-panel" style="margin:12px 16px;">
+        <h4>AI Explainability Panel</h4>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+          <div><div style="font-size:11px;color:var(--muted);">PATTERN</div><strong>${esc(a.pattern)}</strong></div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);">CONFIDENCE</div>
+            <div class="conf-bar">
+              <span>${t.confidence}%</span>
+              <div class="conf-track"><div class="conf-fill" style="width:${t.confidence}%"></div></div>
+            </div>
+          </div>
+          <div><div style="font-size:11px;color:var(--muted);">FP PROBABILITY</div><span>${t.fpProbability}%</span></div>
+          <div><div style="font-size:11px;color:var(--muted);">TRIAGE SOURCE</div>
+            <code style="font-size:11px;color:var(--accent2);">${esc(fmtSource(t.source))}</code></div>
+        </div>
+        <div class="case-note">${esc(t.caseNote || '')}</div>
+      </div>` : `<div style="padding:0 16px 14px;color:var(--muted);font-size:12px;">Triage pending…</div>`;
+
+    return `<div id="${aid}" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;background:var(--panel);overflow:hidden;">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-weight:700;font-size:15px;">${esc(a.pattern)} — ${esc(a.symbol)}</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:3px;">
+            <a href="/alerts#${aid}" style="color:var(--accent2);text-decoration:none;font-weight:600;">${aid}</a>
+            &nbsp;|&nbsp; Trader <strong>${esc(a.traderId)}</strong>
+            &nbsp;|&nbsp; Score <strong>${a.score}</strong>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span class="${sevCls}">${esc(a.severity)}</span>
+          <span class="risk-pill" style="background:${rc.bg};color:${rc.col};border:1px solid ${rc.border};">
+            Risk: <strong>${a.riskScore}</strong>
+          </span>
+          ${t ? verdictBadge(t.verdict) : ''}
+        </div>
+      </div>
+      ${triagePanel}
+    </div>`;
+  }
+
+  async function loadAlerts() {
+    const container = document.getElementById('alertsContainer');
+    if (!container) return;
+    try {
+      const r = await fetch('/api/alerts/recent');
+      if (!r.ok) return;
+      const alerts = await r.json();
+      if (!alerts.length) {
+        container.innerHTML = '<div class="empty" style="margin-top:40px">No alerts yet — trigger a scenario or wait for the scheduler.</div>';
+        return;
+      }
+      container.innerHTML = alerts.map(renderAlertCard).join('');
+      // Scroll to anchor if URL has hash
+      if (location.hash) {
+        const el = document.querySelector(location.hash);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch (e) {}
+  }
+
+  // ── Cases live refresh ────────────────────────────────────────────────────
+  async function loadCases() {
+    const tbody = document.getElementById('casesBody');
+    if (!tbody) return;
+    try {
+      const r = await fetch('/api/cases/recent');
+      if (!r.ok) return;
+      const cases = await r.json();
+      if (!cases.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No compliance cases yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = cases.map(c => {
+        const statusCls = c.status === 'OPEN' ? 'badge-open' : 'badge-closed';
+        const ts = c.createdAt ? toISTFull(c.createdAt) : '—';
+        const aid = esc(c.alertId || '—');
+        const aidLink = c.alertId
+          ? `<a href="/alerts#${aid}" style="color:var(--accent2);text-decoration:none;font-weight:600;">${aid}</a>`
+          : '—';
+        return `<tr>
+          <td><code style="font-size:11px;">${esc(c.caseId)}</code></td>
+          <td>${aidLink}</td>
+          <td><span class="badge ${statusCls}">${esc(c.status)}</span></td>
+          <td>${esc(c.priority)}</td>
+          <td>${esc(c.assignedTo)}</td>
+          <td style="font-size:11px;color:var(--muted);">${ts}</td>
+        </tr>`;
+      }).join('');
+    } catch (e) {}
+  }
+
+  // ── Audit filter + search (server-side) ──────────────────────────────────
   let auditFilter = 'ALL';
+  let auditSearch = '';
+  let auditPage   = 0;
+  const AUDIT_SIZE = 50;
+  let auditSearchTimer = null;
 
   function setAuditFilter(type, el) {
     auditFilter = type;
+    auditPage = 0;
     document.querySelectorAll('.audit-filter-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
-    filterAudit();
+    loadAudit();
   }
 
-  function filterAudit() {
-    const q = (document.getElementById('auditSearch')?.value || '').toLowerCase();
-    const rows = document.querySelectorAll('#auditBody .audit-row');
-    let visible = 0;
-    rows.forEach(row => {
-      const type = (row.dataset.type || '').toUpperCase();
-      const text = (row.dataset.text || '').toLowerCase();
-      const typeMatch = auditFilter === 'ALL' || type.includes(auditFilter);
-      const textMatch = !q || text.includes(q);
-      const show = typeMatch && textMatch;
-      row.style.display = show ? '' : 'none';
-      if (show) visible++;
+  function onAuditSearch(val) {
+    auditSearch = val;
+    auditPage = 0;
+    clearTimeout(auditSearchTimer);
+    auditSearchTimer = setTimeout(loadAudit, 300);
+  }
+
+  async function loadAudit() {
+    const tbody = document.getElementById('auditBody');
+    if (!tbody) return;
+    const params = new URLSearchParams({
+      eventType:  auditFilter === 'ALL' ? '' : auditFilter,
+      searchText: auditSearch,
+      page:       auditPage,
+      size:       AUDIT_SIZE
     });
-    const empty = document.getElementById('auditEmpty');
-    const table = document.getElementById('auditTable');
-    if (empty && table) {
-      empty.style.display = visible === 0 ? 'block' : 'none';
-      table.style.display = visible === 0 ? 'none' : '';
+    try {
+      const r = await fetch('/api/audit?' + params);
+      if (!r.ok) return;
+      const data = await r.json();
+      renderAuditRows(data.content, tbody);
+      renderAuditPagination(data);
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">Error loading audit events.</td></tr>';
     }
+  }
+
+  function renderAuditRows(events, tbody) {
+    if (!events || !events.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">No events match your filter.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = events.map(a => {
+      const et  = a.eventType || '';
+      const cat = auditCat(et);
+      const lbl = auditLabel(et);
+      const ts  = a.eventTime ? toISTFull(a.eventTime) : '—';
+      const rawAid = a.alertId || '';
+      const aid = esc(rawAid);
+      const act = esc(a.actor || 'SYSTEM');
+      const dsc = esc(a.description || '');
+      const aidCell = rawAid
+        ? `<a href="/alerts#${aid}" style="color:var(--accent2);text-decoration:none;font-size:11px;" title="View alert">${aid}</a>`
+        : '<span style="color:var(--muted);font-size:11px;">—</span>';
+      return `<tr class="audit-row audit-${cat}">
+        <td class="audit-ts">${ts}</td>
+        <td><span class="audit-type-chip chip-${cat}">${lbl}</span></td>
+        <td>${aidCell}</td>
+        <td style="font-size:12px;">${act}</td>
+        <td class="audit-desc" title="${dsc}">${dsc}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderAuditPagination(data) {
+    const el = document.getElementById('auditPagination');
+    if (!el) return;
+    const total = data.totalElements || 0;
+    const pages = data.totalPages   || 1;
+    const cur   = data.page         || 0;
+    if (total <= AUDIT_SIZE) {
+      el.innerHTML = `<span>${total} event${total !== 1 ? 's' : ''} in database</span>`;
+    } else {
+      el.innerHTML =
+        `<button onclick="goAuditPage(${cur - 1})" ${cur === 0 ? 'disabled' : ''}>← Prev</button>
+         <span>Page ${cur + 1} of ${pages} &nbsp;·&nbsp; ${total} total events</span>
+         <button onclick="goAuditPage(${cur + 1})" ${cur >= pages - 1 ? 'disabled' : ''}>Next →</button>`;
+    }
+  }
+
+  function goAuditPage(p) {
+    auditPage = Math.max(0, p);
+    loadAudit();
+  }
+
+  function auditCat(et) {
+    if (et.includes('ALERT'))  return 'alert';
+    if (et.includes('TRIAGE')) return 'triage';
+    if (et.includes('CASE'))   return 'case';
+    if (et.includes('WATCH'))  return 'watch';
+    if (et.includes('NOTIF'))  return 'notif';
+    return 'suppress';
+  }
+
+  function auditLabel(et) {
+    return {
+      ALERT_CREATED:      '🚨 Alert Created',
+      ALERT_IGNORED:      '🔇 Alert Ignored',
+      ALERT_REVIEWED:     '🔍 Under Review',
+      TRIAGE_COMPLETE:    '🤖 Triage Complete',
+      CASE_CREATED:       '📁 Case Created',
+      WATCHLIST_AUTO_ADD: '👁 Watchlist Add',
+      WATCHLIST_UPDATED:  '👁 Watchlist Update',
+      NOTIFICATION_SENT:  '🔔 Notification',
+      RISK_SCORED:        '📊 Risk Scored',
+    }[et] || et;
+  }
+
+  // ── Background event toasts ───────────────────────────────────────────────
+  let lastEventPoll = Date.now();
+
+  const TOAST_CONFIG = {
+    ALERT_CREATED:      { icon: '🚨', title: 'Alert Created',            color: '#ef4444' },
+    CASE_CREATED:       { icon: '📋', title: 'Compliance Case Created',  color: '#3b82f6' },
+    WATCHLIST_AUTO_ADD: { icon: '👁', title: 'Watchlist Entry Created',  color: '#f59e0b' },
+    NOTIFICATION_SENT:  { icon: '📧', title: 'Notification Sent',         color: '#10b981' },
+  };
+
+  async function pollEventToasts() {
+    try {
+      const r = await fetch('/api/events/recent?since=' + lastEventPoll);
+      if (!r.ok) return;
+      const events = await r.json();
+      lastEventPoll = Date.now();
+      if (events.length) {
+        events.forEach(showEventToast);
+        // Refresh audit table if we're on the audit page
+        if (document.getElementById('auditBody')) loadAudit();
+      }
+    } catch (e) {}
+  }
+
+  function showEventToast(event) {
+    const cfg = TOAST_CONFIG[event.eventType];
+    if (!cfg) return;
+    const container = document.getElementById('eventToastContainer');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'event-toast';
+    toast.style.borderLeftColor = cfg.color;
+    toast.innerHTML =
+      `<div class="et-title">${cfg.icon} ${esc(cfg.title)}</div>
+       <div class="et-desc">${esc((event.description || '').substring(0, 120))}</div>`;
+    container.appendChild(toast);
+    setTimeout(() => { try { container.removeChild(toast); } catch (e) {} }, 6000);
   }
 
   // ── IST formatter ─────────────────────────────────────────────────────────
@@ -927,6 +1111,27 @@
   convertPageTimestamps();
   setInterval(loadLiveFeed, 3000);
   setInterval(loadCharts, 10000);
+
+  // Alerts page: load and auto-refresh every 8 s
+  if (document.getElementById('alertsContainer')) {
+    loadAlerts();
+    setInterval(loadAlerts, 8000);
+  }
+
+  // Cases page: load and auto-refresh every 8 s
+  if (document.getElementById('casesBody')) {
+    loadCases();
+    setInterval(loadCases, 8000);
+  }
+
+  // Audit page: load server-side data immediately and auto-refresh
+  if (document.getElementById('auditBody')) {
+    loadAudit();
+    setInterval(loadAudit, 6000);
+  }
+
+  // Background event toasts — poll every 5 seconds on all pages
+  setInterval(pollEventToasts, 5000);
 </script>
 </body>
 </html>

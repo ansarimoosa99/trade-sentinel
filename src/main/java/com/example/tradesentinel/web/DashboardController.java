@@ -5,11 +5,15 @@ import com.example.tradesentinel.repository.*;
 import com.example.tradesentinel.service.ScenarioScheduler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -118,6 +122,102 @@ public class DashboardController {
         data.put("riskTrend", riskTrend);
 
         return data;
+    }
+
+    // ── Alerts REST API (for live refresh) ────────────────────────────────────
+
+    @GetMapping("/api/alerts/recent")
+    @ResponseBody
+    public List<Map<String, Object>> recentAlerts() {
+        List<SurveillanceAlertEntity> alerts = alertRepository.findTop50ByOrderByCreatedAtDesc();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (SurveillanceAlertEntity alert : alerts) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("alertId",   alert.getAlertId());
+            m.put("pattern",   alert.getPattern());
+            m.put("symbol",    alert.getSymbol());
+            m.put("traderId",  alert.getTraderId());
+            m.put("severity",  alert.getSeverity());
+            m.put("score",     alert.getScore());
+            m.put("riskScore", alert.getRiskScore());
+            m.put("createdAt", alert.getCreatedAt());
+            triageRepository.findByAlertId(alert.getAlertId()).ifPresent(t -> {
+                Map<String, Object> triage = new LinkedHashMap<>();
+                triage.put("verdict",       t.getVerdict());
+                triage.put("confidence",    t.getConfidence());
+                triage.put("fpProbability", t.getFpProbability());
+                triage.put("source",        t.getSource());
+                triage.put("caseNote",      t.getCaseNote());
+                m.put("triage", triage);
+            });
+            result.add(m);
+        }
+        return result;
+    }
+
+    // ── Cases REST API (for live refresh) ─────────────────────────────────────
+
+    @GetMapping("/api/cases/recent")
+    @ResponseBody
+    public List<Map<String, Object>> recentCases() {
+        return caseRepository.findTop50ByOrderByCreatedAtDesc().stream()
+                .map(c -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("caseId",     c.getCaseId());
+                    m.put("alertId",    c.getAlertId());
+                    m.put("status",     c.getStatus());
+                    m.put("priority",   c.getPriority());
+                    m.put("assignedTo", c.getAssignedTo());
+                    m.put("createdAt",  c.getCreatedAt());
+                    return m;
+                })
+                .collect(Collectors.toList());
+    }
+
+    // ── Audit REST API (server-side filter + pagination) ───────────────────────
+
+    @GetMapping("/api/audit")
+    @ResponseBody
+    public Map<String, Object> auditApi(
+            @RequestParam(defaultValue = "") String eventType,
+            @RequestParam(defaultValue = "") String searchText,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        PageRequest pr = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 200));
+        Page<AuditEventEntity> result = auditRepository.findFiltered(eventType, searchText, pr);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("content", result.getContent().stream().map(this::auditToMap).toList());
+        resp.put("totalElements", result.getTotalElements());
+        resp.put("totalPages", result.getTotalPages());
+        resp.put("page", page);
+        resp.put("size", size);
+        return resp;
+    }
+
+    // ── Events stream for toast notifications ──────────────────────────────────
+
+    @GetMapping("/api/events/recent")
+    @ResponseBody
+    public List<Map<String, Object>> recentEvents(
+            @RequestParam(defaultValue = "0") long since) {
+        Instant sinceInstant = since > 0
+                ? Instant.ofEpochMilli(since)
+                : Instant.now().minusSeconds(5);
+        return auditRepository.findTop100ByOrderByEventTimeDesc().stream()
+                .filter(e -> e.getEventTime() != null && e.getEventTime().isAfter(sinceInstant))
+                .map(this::auditToMap)
+                .toList();
+    }
+
+    private Map<String, Object> auditToMap(AuditEventEntity a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", a.getId());
+        m.put("alertId", a.getAlertId());
+        m.put("eventType", a.getEventType());
+        m.put("description", a.getDescription());
+        m.put("actor", a.getActor());
+        m.put("eventTime", a.getEventTime());
+        return m;
     }
 
     // ── Notifications REST (for dashboard polling) ─────────────────────────────

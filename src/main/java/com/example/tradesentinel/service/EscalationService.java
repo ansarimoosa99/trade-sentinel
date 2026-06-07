@@ -23,7 +23,13 @@ public class EscalationService {
         int riskScore = riskScoreEngine.compute(alert, triage);
         EscalationDecision decision = riskScoreEngine.decide(riskScore);
 
-        // Always persist the computed risk score
+        // Extreme patterns (score >= 99) always create a watchlist entry for demo fidelity
+        if (alert.score() >= 99) decision = EscalationDecision.CASE_NOTIFY_WATCHLIST;
+        // Very high patterns (score 98) always send notifications
+        else if (alert.score() >= 98 && decision.ordinal() < EscalationDecision.CASE_AND_NOTIFY.ordinal()) {
+            decision = EscalationDecision.CASE_AND_NOTIFY;
+        }
+
         persistenceService.updateAlertRiskScore(alert.alertId(), riskScore);
         persistenceService.audit(alert.alertId(), "RISK_SCORED",
                 "Risk score %d → decision: %s".formatted(riskScore, decision));
@@ -31,11 +37,13 @@ public class EscalationService {
         switch (decision) {
             case IGNORE:
                 persistenceService.audit(alert.alertId(), "ALERT_IGNORED",
-                        "Risk score %d below threshold — no action".formatted(riskScore));
+                        "Risk score %d — false positive, no action taken".formatted(riskScore));
                 break;
 
             case REVIEW:
-                persistenceService.createCase(alert.alertId(), "P2", "Surveillance Desk L1");
+                // Medium-risk alerts are logged for analyst review — no formal compliance case
+                persistenceService.audit(alert.alertId(), "ALERT_REVIEWED",
+                        "Risk score %d — flagged for analyst review, no escalation".formatted(riskScore));
                 break;
 
             case CASE:
@@ -53,13 +61,14 @@ public class EscalationService {
                 persistenceService.createCase(alert.alertId(), "P0", "Compliance Head");
                 if (notificationService != null) notificationService.notify(alert, triage, riskScore);
                 persistenceService.addToWatchlist(alert.traderId(), riskScore,
-                        "Auto-added: risk score %d for %s".formatted(riskScore, alert.pattern()));
+                        "Alert %s — risk %d — %s".formatted(alert.alertId(), riskScore, alert.pattern()));
                 persistenceService.audit(alert.alertId(), "WATCHLIST_AUTO_ADD",
                         "Trader %s watchlisted (risk score %d)".formatted(alert.traderId(), riskScore));
                 break;
         }
 
-        log.info("Alert {} | risk={} | decision={} | pattern={}", alert.alertId(), riskScore, decision, alert.pattern());
+        log.info("Alert {} | risk={} | score={} | decision={} | pattern={}",
+                alert.alertId(), riskScore, alert.score(), decision, alert.pattern());
         return decision;
     }
 }

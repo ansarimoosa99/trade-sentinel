@@ -4,6 +4,18 @@
 
 
 
+â¯  can we in some way reducve just "case" scenario? its all filled with case scenario, i want all types. also when in audit page the new entry comes which is mostly "cases" only, and i try to filter others, it doesnt load, tho they were present, the filtering only wqorks for data visible on audit page, it should be queriying data from db right and i shuld be able to search all the adat from db like multiple pages..
+â§ Selected 1 lines from docs\imlpl-2.md in Visual Studio Code
+
+â Please run /login Â· API Error: 401 Invalid authentication credentials
+
+â» Worked for 0s
+
+â¯ also can we make the ui not flicker when relading, its so vissible when it relaods data and looks very unprofessional
+
+
+
+
 Root cause: Thymeleaf evaluates each ${...} block independently and converts it to the string "true" or "false". The ? : operators sitting outside those blocks were just literal characters, not real ternary logic — so the expression chain never worked, and every row landed on audit-case (the third branch happened to match in the concatenated string output).
 
 Fix: Compute the category once using th:with="cat=${...}" — a single ${} containing the full nested ternary in SpEL — then reference ${cat} for both th:class and the chip th:class. Also added a readable label variable so instead of raw TRIAGE_COMPLETE you'll see 🤖 Triage Complete, etc.
